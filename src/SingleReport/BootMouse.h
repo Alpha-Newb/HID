@@ -29,13 +29,43 @@ THE SOFTWARE.
 #include "HID-Settings.h"
 #include "../HID-APIs/MouseAPI.h"
 
+typedef struct {
+	InterfaceDescriptor hid;
+  HIDDescDescriptor desc;
+  EndpointDescriptor in;
+} CustomMouseHIDDescriptor;
+
 
 class BootMouse_ : public PluggableUSBModule, public MouseAPI
 {
 public:
     BootMouse_(void);
     uint8_t getProtocol(void);
-
+	uint8_t getLeds(void);
+	void setFeatureReport(void* report, int length){
+        if(length > 0){
+            featureReport = (uint8_t*)report;
+            featureLength = length;
+            
+            // Disable feature report by default
+            disableFeatureReport();
+        }
+    }
+    
+    int availableFeatureReport(void){
+        if(featureLength < 0){
+            return featureLength & ~0x8000;
+        }
+        return 0;
+    }
+    
+    void enableFeatureReport(void){
+        featureLength &= ~0x8000;
+    }
+    
+    void disableFeatureReport(void){
+        featureLength |= 0x8000;
+    }
 protected:
     // Implementation of the PUSBListNode
     int getInterface(uint8_t* interfaceCount);
@@ -45,7 +75,12 @@ protected:
     EPTYPE_DESCRIPTOR_SIZE epType[1];
     uint8_t protocol;
     uint8_t idle;
+
+	uint8_t leds;
     
+    uint8_t* featureReport;
+    int featureLength;
+
     virtual void SendReport(void* data, int length) override;
 };
 extern BootMouse_ BootMouse;

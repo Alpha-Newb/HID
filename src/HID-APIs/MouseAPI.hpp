@@ -23,6 +23,7 @@ THE SOFTWARE.
 
 // Include guard
 #pragma once
+#include "HID.h"
 
 MouseAPI::MouseAPI(void) : _buttons(0)
 {
@@ -37,17 +38,52 @@ void MouseAPI::begin(void)
 void MouseAPI::end(void)
 {
     _buttons = 0;
-    move(0, 0, 0);
+    //move(0, 0, 0);
 }
 
 void MouseAPI::click(uint8_t b)
 {
 	_buttons = b;
-	move(0,0,0);
+	//move(0,0,0);
 	_buttons = 0;
-	move(0,0,0);
+	//move(0,0,0);
 }
 
+
+
+void MouseAPI::move(uint8_t btn, uint16_t x, uint16_t y, uint8_t wheel)
+{
+	//01
+	//BB
+	//000000
+	//xxxxyyyy
+	//SS
+	HID_MouseReport_Data_t report;
+	report.filler0 = 1;
+	report.buttons = btn;
+	report.filler1 = 0;
+	report.filler2 = 0;
+	report.filler3 = 0;
+	report.xAxis = x;
+	report.yAxis = y;
+	report.wheel = wheel;
+	SendReport(&report, sizeof(report));
+/*
+	uint8_t m[9];
+	m[0] = btn;
+	m[1] = 0;
+	m[2] = 0;
+	m[3] = 0;
+	m[4] = x;
+	m[5] = x >> 8;
+	m[6] = y;
+	m[7] = y >> 8;
+	m[8] = wheel;
+	HID().SendReport(1,m,sizeof(m));*/
+}
+
+
+/*
 void MouseAPI::move(signed char x, signed char y, signed char wheel)
 {
 	HID_MouseReport_Data_t report;
@@ -56,14 +92,14 @@ void MouseAPI::move(signed char x, signed char y, signed char wheel)
 	report.yAxis = y;
 	report.wheel = wheel;
 	SendReport(&report, sizeof(report));
-}
+}*/
 
 void MouseAPI::buttons(uint8_t b)
 {
 	if (b != _buttons)
 	{
 		_buttons = b;
-		move(0,0,0);
+		//move(0,0,0);
 	}
 }
 
@@ -80,7 +116,7 @@ void MouseAPI::release(uint8_t b)
 void MouseAPI::releaseAll(void)
 {
   _buttons = 0;
-	move(0,0,0);
+	//move(0,0,0);
 }
 
 bool MouseAPI::isPressed(uint8_t b)

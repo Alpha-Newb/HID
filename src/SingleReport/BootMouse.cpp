@@ -24,42 +24,71 @@ THE SOFTWARE.
 #include "BootMouse.h"
 
 static const uint8_t _hidReportDescriptorMouse[] PROGMEM = {
- /*  Mouse relative */
-    0x05, 0x01,                      /* USAGE_PAGE (Generic Desktop)	  54 */
-    0x09, 0x02,                      /* USAGE (Mouse) */
-    0xa1, 0x01,                      /* COLLECTION (Application) */
-
-    /* Pointer and Physical are required by Apple Recovery */
-    0x09, 0x01,                      /*   USAGE (Pointer) */
-    0xa1, 0x00,                      /*   COLLECTION (Physical) */
-
-	/* 8 Buttons */
-    0x05, 0x09,                      /*     USAGE_PAGE (Button) */
-    0x19, 0x01,                      /*     USAGE_MINIMUM (Button 1) */
-    0x29, 0x08,                      /*     USAGE_MAXIMUM (Button 8) */
-    0x15, 0x00,                      /*     LOGICAL_MINIMUM (0) */
-    0x25, 0x01,                      /*     LOGICAL_MAXIMUM (1) */
-    0x95, 0x08,                      /*     REPORT_COUNT (8) */
-    0x75, 0x01,                      /*     REPORT_SIZE (1) */
-    0x81, 0x02,                      /*     INPUT (Data,Var,Abs) */
-
-	/* X, Y, Wheel */
-    0x05, 0x01,                      /*     USAGE_PAGE (Generic Desktop) */
-    0x09, 0x30,                      /*     USAGE (X) */
-    0x09, 0x31,                      /*     USAGE (Y) */
-    0x09, 0x38,                      /*     USAGE (Wheel) */
-    0x15, 0x81,                      /*     LOGICAL_MINIMUM (-127) */
-    0x25, 0x7f,                      /*     LOGICAL_MAXIMUM (127) */
-    0x75, 0x08,                      /*     REPORT_SIZE (8) */
-    0x95, 0x03,                      /*     REPORT_COUNT (3) */
-    0x81, 0x06,                      /*     INPUT (Data,Var,Rel) */
-
-	/* End */
-    0xc0,                           /* END_COLLECTION (Physical) */
-    0xc0                            /* END_COLLECTION */
+0x05,0x01,// USAGE_PAGE (Generic Desktop)
+	0x09,0x02,// USAGE (MouseC)
+	
+	0xa1,0x01,// COLLECTION (Application)
+	0x85,0x01,
+	0x09,0x01,
+	0xa1,0x00,
+	0x05,0x09,
+	0x19,0x01,
+	0x29,0x20,
+	0x15,0x00,
+	0x25,0x01,
+	0x95,0x20,
+	0x75,0x01,
+	0x81,0x02,
+	0x05,0x01,
+	0x09,0x30,
+	0x09,0x31,
+	0x16,0x01,
+	0x80,0x26,
+	0xff,0x7f,
+	0x75,0x10,
+	0x95,0x02,
+	0x81,0x06,
+	0x09,0x38,
+	0x15,0x81,
+	0x25,0x7f,
+	0x75,0x08,
+	0x95,0x01,
+	0x81,0x06,
+	0xc0,0xc0,//   END_COLLECTION
+	
+	0x06,0xc1,//USAGE PAGE VENDOR
+	0xff,
+	
+	0x09,0x02,//USAGE VENDOR
+	
+	0xa1,0x01,// COLLECTION (Application)
+	0x85,0x03,
+	0x15,0x00,
+	0x26,0xff,
+	0x00,0x09,
+	0x02,0x95,
+	0x3f,0x75,
+	0x08,0x81,
+	0x02,0xc0,//   END_COLLECTION
+	
+	0x06,0xc2,//USAGE PAGE VENDOR
+	0xff,
+	
+	0x09,0x03,//USAGE VENDOR
+	
+	
+	0xa1,0x01,// COLLECTION (Application)
+	0x85,0x0e,
+	0x15,0x00,
+	0x26,0xff,
+	0x00,0x95,
+	0x3f,0x75,
+	0x08,0x09,
+	0x03,0x81,
+	0x02,0xc0,//   END_COLLECTION
 };
 
-BootMouse_::BootMouse_(void) : PluggableUSBModule(1, 1, epType), protocol(HID_REPORT_PROTOCOL), idle(1)
+BootMouse_::BootMouse_(void) : PluggableUSBModule(1, 1, epType), protocol(HID_REPORT_PROTOCOL), idle(1), featureReport(NULL), featureLength(64)
 {
 	epType[0] = EP_TYPE_INTERRUPT_IN;
 	PluggableUSB().plug(this);
@@ -68,8 +97,8 @@ BootMouse_::BootMouse_(void) : PluggableUSBModule(1, 1, epType), protocol(HID_RE
 int BootMouse_::getInterface(uint8_t* interfaceCount)
 {
 	*interfaceCount += 1; // uses 1
-	HIDDescriptor hidInterface = {
-		D_INTERFACE(pluggedInterface, 1, USB_DEVICE_CLASS_HUMAN_INTERFACE, HID_SUBCLASS_BOOT_INTERFACE, HID_PROTOCOL_MOUSE),
+	CustomMouseHIDDescriptor hidInterface = {
+		D_INTERFACE(pluggedInterface, 1, USB_DEVICE_CLASS_HUMAN_INTERFACE, HID_SUBCLASS_NONE, HID_PROTOCOL_NONE),
 		D_HIDREPORT(sizeof(_hidReportDescriptorMouse)),
 		D_ENDPOINT(USB_ENDPOINT_IN(pluggedEndpoint), USB_ENDPOINT_TYPE_INTERRUPT, USB_EP_SIZE, 0x01)
 	};
@@ -97,6 +126,7 @@ int BootMouse_::getDescriptor(USBSetup& setup)
 
 	return 0;
 }
+
 
 bool BootMouse_::setup(USBSetup& setup)
 {
@@ -141,6 +171,7 @@ bool BootMouse_::setup(USBSetup& setup)
 		}
 		if (request == HID_SET_REPORT)
 		{
+			return true;
 		}
 	}
 
@@ -151,12 +182,17 @@ uint8_t BootMouse_::getProtocol(void){
     return protocol;
 }
 
+uint8_t BootMouse_::getLeds(void){
+    return leds;
+}
+
 void BootMouse_::SendReport(void* data, int length){
 	if(protocol == HID_BOOT_PROTOCOL){
 		USB_Send(pluggedEndpoint | TRANSFER_RELEASE, data, sizeof(HID_BootMouseReport_Data_t));
 	}
 	else{
 		USB_Send(pluggedEndpoint | TRANSFER_RELEASE, data, length);
+		//HID().SendReport(HID_REPORTID_MOUSE, data, length);
 	}
 }
 

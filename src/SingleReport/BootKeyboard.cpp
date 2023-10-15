@@ -23,72 +23,44 @@ THE SOFTWARE.
 
 #include "BootKeyboard.h"
 
-static const uint8_t _hidReportDescriptorKeyboard[] PROGMEM = {
-    //  Keyboard
-    0x05, 0x01,                      /* USAGE_PAGE (Generic Desktop)	  47 */
-    0x09, 0x06,                      /* USAGE (Keyboard) */
-    0xa1, 0x01,                      /* COLLECTION (Application) */
-    0x05, 0x07,                      /*   USAGE_PAGE (Keyboard) */
-
-    /* Keyboard Modifiers (shift, alt, ...) */
-    0x19, 0xe0,                      /*   USAGE_MINIMUM (Keyboard LeftControl) */
-    0x29, 0xe7,                      /*   USAGE_MAXIMUM (Keyboard Right GUI) */
-    0x15, 0x00,                      /*   LOGICAL_MINIMUM (0) */
-    0x25, 0x01,                      /*   LOGICAL_MAXIMUM (1) */
-    0x75, 0x01,                      /*   REPORT_SIZE (1) */
-	0x95, 0x08,                      /*   REPORT_COUNT (8) */
-    0x81, 0x02,                      /*   INPUT (Data,Var,Abs) */
-
-    /* Reserved byte, used for consumer reports, only works with linux */
-	0x05, 0x0C,             		 /*   Usage Page (Consumer) */
-    0x95, 0x01,                      /*   REPORT_COUNT (1) */
-    0x75, 0x08,                      /*   REPORT_SIZE (8) */
-    0x15, 0x00,                      /*   LOGICAL_MINIMUM (0) */
-    0x26, 0xFF, 0x00,                /*   LOGICAL_MAXIMUM (255) */
-    0x19, 0x00,                      /*   USAGE_MINIMUM (0) */
-    0x29, 0xFF,                      /*   USAGE_MAXIMUM (255) */
-    0x81, 0x00,                      /*   INPUT (Data,Ary,Abs) */
-
-	/* 5 LEDs for num lock etc, 3 left for advanced, custom usage */
-	0x05, 0x08,						 /*   USAGE_PAGE (LEDs) */
-	0x19, 0x01,						 /*   USAGE_MINIMUM (Num Lock) */
-	0x29, 0x08,						 /*   USAGE_MAXIMUM (Kana + 3 custom)*/
-	0x95, 0x08,						 /*   REPORT_COUNT (8) */
-	0x75, 0x01,						 /*   REPORT_SIZE (1) */
-	0x91, 0x02,						 /*   OUTPUT (Data,Var,Abs) */
-
-    /* 6 Keyboard keys */
-    0x05, 0x07,                      /*   USAGE_PAGE (Keyboard) */
-    0x95, 0x06,                      /*   REPORT_COUNT (6) */
-    0x75, 0x08,                      /*   REPORT_SIZE (8) */
-    0x15, 0x00,                      /*   LOGICAL_MINIMUM (0) */
-    0x26, 0xE7, 0x00,                /*   LOGICAL_MAXIMUM (231) */
-    0x19, 0x00,                      /*   USAGE_MINIMUM (Reserved (no event indicated)) */
-    0x29, 0xE7,                      /*   USAGE_MAXIMUM (Keyboard Right GUI) */
-    0x81, 0x00,                      /*   INPUT (Data,Ary,Abs) */
-
-    /* End */
-    0xc0                            /* END_COLLECTION */
+static const uint8_t _hidReportDescriptorDevice[] PROGMEM = {
+	0x06,0xc2,
+0xff,0x09,
+0x04,0xa1,
+0x01,0x15,
+0x00,0x26,
+0xff,0x00,
+0x95,0x40,
+0x75,0x08,
+0x09,0x02,
+0xb1,0x02,
+0x09,0x02,
+0x81,0x02,
+0x09,0x04,
+0x91,0x02,
+0xc0,
 };
 
-BootKeyboard_::BootKeyboard_(void) : PluggableUSBModule(1, 1, epType), protocol(HID_REPORT_PROTOCOL), idle(1), leds(0), featureReport(NULL), featureLength(0)
+BootDevice_::BootDevice_(void) : PluggableUSBModule(2, 1, epType), protocol(HID_REPORT_PROTOCOL), idle(1), featureReport(NULL), featureLength(64)
 {
 	epType[0] = EP_TYPE_INTERRUPT_IN;
+	epType[1] = EP_TYPE_INTERRUPT_IN;
 	PluggableUSB().plug(this);
 }
 
-int BootKeyboard_::getInterface(uint8_t* interfaceCount)
+int BootDevice_::getInterface(uint8_t* interfaceCount)
 {
 	*interfaceCount += 1; // uses 1
-	HIDDescriptor hidInterface = {
-		D_INTERFACE(pluggedInterface, 1, USB_DEVICE_CLASS_HUMAN_INTERFACE, HID_SUBCLASS_BOOT_INTERFACE, HID_PROTOCOL_KEYBOARD),
-		D_HIDREPORT(sizeof(_hidReportDescriptorKeyboard)),
-		D_ENDPOINT(USB_ENDPOINT_IN(pluggedEndpoint), USB_ENDPOINT_TYPE_INTERRUPT, USB_EP_SIZE, 0x01)
+	CustomDeviceHIDDescriptor hidInterface = {
+		D_INTERFACE(pluggedInterface, 2, USB_DEVICE_CLASS_HUMAN_INTERFACE, HID_SUBCLASS_NONE, HID_PROTOCOL_NONE),
+		D_HIDREPORT(sizeof(_hidReportDescriptorDevice)),
+		D_ENDPOINT(USB_ENDPOINT_IN(pluggedEndpoint), USB_ENDPOINT_TYPE_INTERRUPT, USB_EP_SIZE, 0x01),
+		D_ENDPOINT(USB_ENDPOINT_OUT(pluggedEndpoint), USB_ENDPOINT_TYPE_INTERRUPT, USB_EP_SIZE, 0x01)
 	};
 	return USB_SendControl(0, &hidInterface, sizeof(hidInterface));
 }
 
-int BootKeyboard_::getDescriptor(USBSetup& setup)
+int BootDevice_::getDescriptor(USBSetup& setup)
 {
 	// In a HID Class Descriptor wIndex cointains the interface number
 	if (setup.wIndex != pluggedInterface) { return 0; }
@@ -98,19 +70,19 @@ int BootKeyboard_::getDescriptor(USBSetup& setup)
 
 	if (setup.wValueH == HID_HID_DESCRIPTOR_TYPE) {
 		// Apple UEFI and USBCV wants it
-		HIDDescDescriptor desc = D_HIDREPORT(sizeof(_hidReportDescriptorKeyboard));
+		HIDDescDescriptor desc = D_HIDREPORT(sizeof(_hidReportDescriptorDevice));
 		return USB_SendControl(0, &desc, sizeof(desc));
 	} else if (setup.wValueH == HID_REPORT_DESCRIPTOR_TYPE) {
 		// Reset the protocol on reenumeration. Normally the host should not assume the state of the protocol
 		// due to the USB specs, but Windows and Linux just assumes its in report mode.
 		protocol = HID_REPORT_PROTOCOL;
-		return USB_SendControl(TRANSFER_PGM, _hidReportDescriptorKeyboard, sizeof(_hidReportDescriptorKeyboard));
+		return USB_SendControl(TRANSFER_PGM, _hidReportDescriptorDevice, sizeof(_hidReportDescriptorDevice));
 	}
 
 	return 0;
 }
 
-bool BootKeyboard_::setup(USBSetup& setup)
+bool BootDevice_::setup(USBSetup& setup)
 {
 	if (pluggedInterface != setup.wIndex) {
 		return false;
@@ -153,65 +125,30 @@ bool BootKeyboard_::setup(USBSetup& setup)
 		}
 		if (request == HID_SET_REPORT)
 		{
-			// Check if data has the correct length afterwards
-			int length = setup.wLength;
-
-			// Feature (set feature report)
-			if(setup.wValueH == HID_REPORT_TYPE_FEATURE){
-				// No need to check for negative featureLength values,
-				// except the host tries to send more then 32k bytes.
-				// We dont have that much ram anyways.
-				if (length == featureLength) {
-					USB_RecvControl(featureReport, featureLength);
-
-					// Block until data is read (make length negative)
-					disableFeatureReport();
-					return true;
-				}
-				// TODO fake clear data?
-			}
-
-			// Output (set led states)
-			else if(setup.wValueH == HID_REPORT_TYPE_OUTPUT){
-				if(length == sizeof(leds)){
-					USB_RecvControl(&leds, length);
-					return true;
-				}
-			}
-
-			// Input (set HID report)
-			else if(setup.wValueH == HID_REPORT_TYPE_INPUT)
-			{
-				if(length == sizeof(_keyReport)){
-					USB_RecvControl(&_keyReport, length);
-					return true;
-				}
-			}
+			return true;
 		}
 	}
 
 	return false;
 }
 
-uint8_t BootKeyboard_::getLeds(void){
+uint8_t BootDevice_::getLeds(void){
     return leds;
 }
 
-uint8_t BootKeyboard_::getProtocol(void){
+uint8_t BootDevice_::getProtocol(void){
     return protocol;
 }
 
-int BootKeyboard_::send(void){
-	return USB_Send(pluggedEndpoint | TRANSFER_RELEASE, &_keyReport, sizeof(_keyReport));
+void BootDevice_::SendReport(void* data, int length){
+	if(protocol == HID_BOOT_PROTOCOL){
+		USB_Send(pluggedEndpoint | TRANSFER_RELEASE, data, sizeof(HID_BootMouseReport_Data_t));
+	}
+	else{
+		USB_Send(pluggedEndpoint | TRANSFER_RELEASE, data, length);
+	}
 }
 
-void BootKeyboard_::wakeupHost(void){
-#ifdef __AVR__
-	USBDevice.wakeupHost();
-#endif
-}
-
-
-BootKeyboard_ BootKeyboard;
+BootDevice_ BootDevice;
 
 

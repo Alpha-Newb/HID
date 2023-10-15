@@ -43,12 +43,17 @@ typedef union ATTRIBUTE_PACKED {
 	uint16_t whole16[0];
 	uint32_t whole32[0];
 	struct ATTRIBUTE_PACKED {
+		uint8_t filler0;
 		uint8_t buttons;
-		int8_t xAxis;
-		int8_t yAxis;
-		int8_t wheel;
+		uint8_t filler1;
+		uint8_t filler2;
+		uint8_t filler3;
+		uint16_t xAxis;
+		uint16_t yAxis;
+		uint8_t wheel;
 	};
 } HID_MouseReport_Data_t;
+
 
 typedef union ATTRIBUTE_PACKED {
 	// BootMouse report: 3 buttons, position
@@ -70,7 +75,8 @@ public:
   inline void begin(void);
   inline void end(void);
   inline void click(uint8_t b = MOUSE_LEFT);
-  inline void move(signed char x, signed char y, signed char wheel = 0);
+  //inline void move(signed char x, signed char y, signed char wheel = 0);
+  inline void move(uint8_t btn, uint16_t x, uint16_t y, uint8_t wheel);
   inline void press(uint8_t b = MOUSE_LEFT);   // press LEFT by default
   inline void release(uint8_t b = MOUSE_LEFT); // release LEFT by default
 	inline void releaseAll(void);

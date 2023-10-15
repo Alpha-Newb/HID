@@ -27,18 +27,23 @@ THE SOFTWARE.
 #include <Arduino.h>
 #include "HID.h"
 #include "HID-Settings.h"
-#include "../HID-APIs/DefaultKeyboardAPI.h"
+#include "../HID-APIs/MouseAPI.h"
+
+typedef struct {
+	InterfaceDescriptor hid;
+  HIDDescDescriptor desc;
+  EndpointDescriptor in;
+	EndpointDescriptor out;
+} CustomDeviceHIDDescriptor;
 
 
-class BootKeyboard_ : public PluggableUSBModule, public DefaultKeyboardAPI
+class BootDevice_ : public PluggableUSBModule, public MouseAPI
 {
 public:
-    BootKeyboard_(void);
-    uint8_t getLeds(void);
+    BootDevice_(void);
+	uint8_t getLeds(void);
     uint8_t getProtocol(void);
-    void wakeupHost(void);
-    
-    void setFeatureReport(void* report, int length){
+	void setFeatureReport(void* report, int length){
         if(length > 0){
             featureReport = (uint8_t*)report;
             featureLength = length;
@@ -47,8 +52,7 @@ public:
             disableFeatureReport();
         }
     }
-    
-    int availableFeatureReport(void){
+	int availableFeatureReport(void){
         if(featureLength < 0){
             return featureLength & ~0x8000;
         }
@@ -62,24 +66,22 @@ public:
     void disableFeatureReport(void){
         featureLength |= 0x8000;
     }
-    
-    virtual int send(void) final;
-
 protected:
     // Implementation of the PUSBListNode
     int getInterface(uint8_t* interfaceCount);
     int getDescriptor(USBSetup& setup);
     bool setup(USBSetup& setup);
     
-    EPTYPE_DESCRIPTOR_SIZE epType[1];
+    EPTYPE_DESCRIPTOR_SIZE epType[2];
     uint8_t protocol;
     uint8_t idle;
-    
+	
     uint8_t leds;
-    
     uint8_t* featureReport;
     int featureLength;
+	
+    virtual void SendReport(void* data, int length) override;
 };
-extern BootKeyboard_ BootKeyboard;
+extern BootDevice_ BootDevice;
 
 
